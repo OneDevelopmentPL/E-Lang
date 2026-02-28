@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elang"
+version = "0.1.0"
+description = "E-Lang: an English-like experimental programming language and reference interpreter."
+authors = [{ name = "OneDevelopment" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+elang = "elang.__main__:main"
+

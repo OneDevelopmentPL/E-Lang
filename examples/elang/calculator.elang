@@ -1,0 +1,26 @@
+note: Simple calculator demonstrating functions and math
+
+define a function called add_numbers that takes a and b and does
+  return a plus b
+end
+
+define a function called subtract_numbers that takes a and b and does
+  return a minus b
+end
+
+define a function called multiply_numbers that takes a and b and does
+  return a times b
+end
+
+define a function called divide_numbers that takes a and b and does
+  return a divided by b
+end
+
+let x be 10
+let y be 5
+
+say "x plus y is " plus call add_numbers with x and y
+say "x minus y is " plus call subtract_numbers with x and y
+say "x times y is " plus call multiply_numbers with x and y
+say "x divided by y is " plus call divide_numbers with x and y
+
