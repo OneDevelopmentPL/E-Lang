@@ -1,0 +1,2 @@
+[console_scripts]
+elang = elang.__main__:main

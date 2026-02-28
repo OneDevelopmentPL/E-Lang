@@ -1,0 +1,7 @@
+create window with name mygui
+set mygui title to "Title"
+set mygui size to x equals 300, y equals 300
+
+add label to mygui with name testlabel
+set testlabel text to "test"
+show testlabel in x equals 50, y equals 50

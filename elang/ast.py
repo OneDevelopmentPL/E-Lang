@@ -133,3 +133,45 @@ class MathUpdate(Stmt):
 class ExprStmt(Stmt):
     expr: Expr
 
+
+# GUI statements ------------------------------------------------------------
+
+
+@dataclass
+class CreateWindow(Stmt):
+    name: str
+
+
+@dataclass
+class AddButton(Stmt):
+    window_name: str
+    button_name: str
+
+
+@dataclass
+class AddLabel(Stmt):
+    window_name: str
+    label_name: str
+
+
+@dataclass
+class SetGuiProperty(Stmt):
+    target_name: str
+    property_name: str
+    expr: Expr
+
+
+@dataclass
+class SetGuiSize(Stmt):
+    window_name: str
+    width: int
+    height: int
+
+
+@dataclass
+class ShowWidget(Stmt):
+    name: str
+    x: Optional[Expr] = None
+    y: Optional[Expr] = None
+
+

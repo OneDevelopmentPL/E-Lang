@@ -60,8 +60,18 @@ class Parser:
             expr = self._expression()
             return ast.DisplayValue(expr)
         if self._match("CREATE"):
+            # Either "create window ..." or "create a list ..."
+            if self._check("WINDOW"):
+                return self._create_window_stmt()
             return self._create_list_stmt()
-        if self._match("ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"):
+        if self._match("SHOW"):
+            return self._show_widget_stmt()
+        if self._match("ADD"):
+            # Either math update ("add 1 to x") or GUI add
+            if self._check("BUTTON") or self._check("LABEL"):
+                return self._add_gui_stmt()
+            return self._math_update_stmt(previous_kind="ADD")
+        if self._match("SUBTRACT", "MULTIPLY", "DIVIDE"):
             return self._math_update_stmt(previous_kind=self._previous().type)
         if self._match("RETURN"):
             expr = self._expression()
@@ -76,8 +86,25 @@ class Parser:
         expr = self._expression()
         return ast.Let(name, expr)
 
-    def _set_stmt(self) -> ast.Set:
+    def _set_stmt(self) -> ast.Stmt:
         name = self._consume("IDENT", "I expected a name after 'set'").lexeme
+
+        # GUI property forms:
+        # - set mygui title to "Title"
+        # - set testbutton text to "text"
+        # - set mygui size to x equals 300, y equals 300
+        if self._check("TITLE") or self._check("TEXT") or self._check("SIZE"):
+            prop_token = self._advance()
+            prop = prop_token.lexeme.lower()
+
+            if prop == "size":
+                return self._set_size_stmt(window_name=name)
+
+            self._consume("TO", "I expected 'to' after the property name")
+            expr = self._expression()
+            return ast.SetGuiProperty(name, prop, expr)
+
+        # Fallback: standard variable assignment.
         self._consume("TO", "I expected 'to' after the name")
         expr = self._expression()
         return ast.Set(name, expr)
@@ -178,6 +205,93 @@ class Parser:
             else:
                 break
         return ast.CreateList(name, items)
+
+    def _create_window_stmt(self) -> ast.CreateWindow:
+        # We have already consumed 'create', and next token is 'window'.
+        self._consume("WINDOW", "I expected 'window' after 'create'")
+        self._consume("WITH", "I expected 'with' after 'create window'")
+        self._consume("NAME", "I expected 'name' after 'with'")
+        name = self._consume("IDENT", "I expected the window name").lexeme
+        return ast.CreateWindow(name)
+
+    def _add_gui_stmt(self) -> ast.Stmt:
+        # We have already consumed 'add'.
+        if self._match("BUTTON"):
+            kind = "button"
+        elif self._match("LABEL"):
+            kind = "label"
+        else:
+            raise self._error(self._peek(), "I expected 'button' or 'label' after 'add'")
+
+        self._consume("TO", "I expected 'to' after the control type")
+        window_name = self._consume(
+            "IDENT", "I expected the window name after 'to'"
+        ).lexeme
+        self._consume("WITH", "I expected 'with' after the window name")
+        self._consume("NAME", "I expected 'name' after 'with'")
+        widget_name = self._consume(
+            "IDENT", "I expected the control name after 'name'"
+        ).lexeme
+
+        if kind == "button":
+            return ast.AddButton(window_name=window_name, button_name=widget_name)
+        return ast.AddLabel(window_name=window_name, label_name=widget_name)
+
+    def _set_size_stmt(self, window_name: str) -> ast.SetGuiSize:
+        # Grammar: set WINDOW size to x equals 300, y equals 300
+        self._consume("TO", "I expected 'to' after 'size'")
+        self._consume("X", "I expected 'x' after 'size to'")
+        # allow either 'equals' or 'is equal to'
+        if self._match("EQUALS"):
+            pass
+        elif self._match("IS"):
+            self._consume("EQUAL", "I expected 'equal' after 'is'")
+            self._consume("TO", "I expected 'to' after 'equal'")
+        else:
+            self._consume("EQUALS", "I expected 'equals' after 'x'")
+        x_token = self._consume("NUMBER", "I expected a number for the x value")
+        # comma between coordinates
+        if self._check("COMMA"):
+            self._advance()
+        self._consume("Y", "I expected 'y' after the x value")
+        if self._match("EQUALS"):
+            pass
+        elif self._match("IS"):
+            self._consume("EQUAL", "I expected 'equal' after 'is'")
+            self._consume("TO", "I expected 'to' after 'equal'")
+        else:
+            self._consume("EQUALS", "I expected 'equals' after 'y'")
+        y_token = self._consume("NUMBER", "I expected a number for the y value")
+        return ast.SetGuiSize(window_name, int(x_token.lexeme), int(y_token.lexeme))
+
+    def _show_widget_stmt(self) -> ast.ShowWidget:
+        # show mygui
+        # show testbutton in x equals 10, y equals 20
+        name = self._consume("IDENT", "I expected a widget or window name after 'show'").lexeme
+        if not self._match("IN"):
+            return ast.ShowWidget(name=name)
+        self._consume("X", "I expected 'x' after 'in'")
+        # again support 'equals' or 'is equal to'
+        if self._match("EQUALS"):
+            pass
+        elif self._match("IS"):
+            self._consume("EQUAL", "I expected 'equal' after 'is'")
+            self._consume("TO", "I expected 'to' after 'equal'")
+        else:
+            self._consume("EQUALS", "I expected 'equals' after 'x'")
+        x_expr = self._expression()
+        if self._check("COMMA"):
+            self._advance()
+        self._consume("Y", "I expected 'y' after the x expression")
+        if self._match("EQUALS"):
+            pass
+        elif self._match("IS"):
+            self._consume("EQUAL", "I expected 'equal' after 'is'")
+            self._consume("TO", "I expected 'to' after 'equal'")
+        else:
+            self._consume("EQUALS", "I expected 'equals' after 'y'")
+        y_expr = self._expression()
+        return ast.ShowWidget(name=name, x=x_expr, y=y_expr)
 
     def _math_update_stmt(self, previous_kind: str) -> ast.MathUpdate:
         kind = previous_kind  # Already consumed the verb token.

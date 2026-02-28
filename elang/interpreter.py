@@ -51,6 +51,7 @@ class Interpreter:
         self.global_env = Environment()
         self._install_builtins(self.global_env)
         self.output: List[str] = []
+        self._gui: Optional["GuiManager"] = None
 
     # Public API ----------------------------------------------------------
 
@@ -124,6 +125,22 @@ class Interpreter:
         elif isinstance(stmt, ast.ExprStmt):
             # Evaluate for side effects (e.g., calling a function).
             self._eval(stmt.expr, env)
+        elif isinstance(stmt, ast.CreateWindow):
+            self._ensure_gui().create_window(stmt.name)
+        elif isinstance(stmt, ast.AddButton):
+            self._ensure_gui().add_button(stmt.window_name, stmt.button_name)
+        elif isinstance(stmt, ast.AddLabel):
+            self._ensure_gui().add_label(stmt.window_name, stmt.label_name)
+        elif isinstance(stmt, ast.SetGuiProperty):
+            self._ensure_gui().set_property(
+                stmt.target_name, stmt.property_name, self._eval(stmt.expr, env)
+            )
+        elif isinstance(stmt, ast.SetGuiSize):
+            self._ensure_gui().set_size(stmt.window_name, stmt.width, stmt.height)
+        elif isinstance(stmt, ast.ShowWidget):
+            x_val = self._eval(stmt.x, env) if stmt.x is not None else None
+            y_val = self._eval(stmt.y, env) if stmt.y is not None else None
+            self._ensure_gui().show(stmt.name, x_val, y_val)
         else:
             raise ELangRuntimeError(f"I do not know how to execute statement type {type(stmt)!r}")
 
@@ -290,6 +307,111 @@ class Interpreter:
     def _ensure_numbers(left: Any, right: Any, context: str) -> None:
         if not isinstance(left, (int, float)) or not isinstance(right, (int, float)):
             raise ELangTypeError(f"I expected numbers to {context}")
+
+    # GUI support ----------------------------------------------------------
+
+    def _ensure_gui(self) -> "GuiManager":
+        if self._gui is None:
+            self._gui = GuiManager()
+        return self._gui
+
+
+class GuiManager:
+    """
+    Very small wrapper around Tkinter so E-Lang programs can create
+    simple windows, buttons, and labels.
+    """
+
+    def __init__(self) -> None:
+        try:
+            import tkinter as tk
+        except Exception as exc:
+            raise ELangRuntimeError(
+                "I tried to create a graphical window, but Tkinter is not available."
+            ) from exc
+
+        self._tk = tk
+        self._root: Optional[tk.Tk] = None
+        self._widgets: Dict[str, Any] = {}
+
+    def _get_root(self) -> "tk.Tk":  # type: ignore[name-defined]
+        if self._root is None:
+            self._root = self._tk.Tk()
+        return self._root
+
+    def create_window(self, name: str) -> None:
+        root = self._get_root()
+        self._widgets[name] = root
+
+    def _get_widget(self, name: str) -> Any:
+        if name not in self._widgets:
+            raise ELangRuntimeError(f"I could not find a window or widget called \"{name}\"")
+        return self._widgets[name]
+
+    def add_button(self, window_name: str, button_name: str) -> None:
+        parent = self._get_widget(window_name)
+        button = self._tk.Button(parent)
+        self._widgets[button_name] = button
+
+    def add_label(self, window_name: str, label_name: str) -> None:
+        parent = self._get_widget(window_name)
+        label = self._tk.Label(parent)
+        self._widgets[label_name] = label
+
+    def set_property(self, target_name: str, property_name: str, value: Any) -> None:
+        widget = self._get_widget(target_name)
+        prop = property_name.lower()
+        if prop == "title":
+            # Only meaningful on the main window.
+            if hasattr(widget, "title"):
+                widget.title(str(value))
+            else:
+                raise ELangRuntimeError(
+                    f"I can only set the title of a window, not of '{target_name}'"
+                )
+        elif prop == "text":
+            if hasattr(widget, "config"):
+                widget.config(text=str(value))
+            else:
+                raise ELangRuntimeError(
+                    f"I can only set the text of things like buttons and labels, not of '{target_name}'"
+                )
+        else:
+            raise ELangRuntimeError(
+                f"I do not know how to change the property '{property_name}' on '{target_name}'"
+            )
+
+    def set_size(self, window_name: str, width: int, height: int) -> None:
+        widget = self._get_widget(window_name)
+        if hasattr(widget, "geometry"):
+            widget.geometry(f"{width}x{height}")
+        else:
+            raise ELangRuntimeError(
+                f"I can only change the size of a window, not of '{window_name}'"
+            )
+
+    def show(self, name: str, x: Optional[Any], y: Optional[Any]) -> None:
+        widget = self._get_widget(name)
+        tk = self._tk
+
+        if isinstance(widget, tk.Tk):
+            # Showing the window starts the event loop. It should normally
+            # be the last action in the program.
+            widget.mainloop()
+            return
+
+        # Child widgets: place at coordinates or pack by default.
+        if x is not None and y is not None:
+            try:
+                x_int = int(x)
+                y_int = int(y)
+            except (TypeError, ValueError) as exc:
+                raise ELangTypeError(
+                    "I expected whole numbers for the x and y positions"
+                ) from exc
+            widget.place(x=x_int, y=y_int)
+        else:
+            widget.pack()
 
 
 def run_source(source: str) -> Tuple[Environment, str]:

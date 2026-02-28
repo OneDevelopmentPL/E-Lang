@@ -76,6 +76,17 @@ KEYWORDS = {
     "divided": "DIVIDED",
     "over": "OVER",
     "modulo": "MODULO",
+    "window": "WINDOW",
+    "name": "NAME",
+    "title": "TITLE",
+    "size": "SIZE",
+    "button": "BUTTON",
+    "label": "LABEL",
+    "text": "TEXT",
+    "in": "IN",
+    "x": "X",
+    "y": "Y",
+    "show": "SHOW",
 }
 
 
