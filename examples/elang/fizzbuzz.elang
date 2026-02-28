@@ -3,13 +3,13 @@ note: FizzBuzz from 1 to 20
 let number be 1
 
 while number is less than 21 do
-  if (number modulo 15) is equal to 0 then
+  if number modulo 15 is equal to 0 then
     say "FizzBuzz"
   otherwise
-    if (number modulo 3) is equal to 0 then
+    if number modulo 3 is equal to 0 then
       say "Fizz"
     otherwise
-      if (number modulo 5) is equal to 0 then
+      if number modulo 5 is equal to 0 then
         say "Buzz"
       otherwise
         say number
@@ -19,4 +19,3 @@ while number is less than 21 do
 
   add 1 to number
 end
-

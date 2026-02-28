@@ -1,9 +1,0 @@
-note: Create a list and show it sorted
-
-create a list called numbers containing 5, 3, 9, 1, 4
-
-say "Original numbers: " plus call join_with with numbers and ", "
-
-set sorted_numbers to call sort_ascending with numbers
-say "Sorted numbers: " plus call join_with with sorted_numbers and ", "
-
