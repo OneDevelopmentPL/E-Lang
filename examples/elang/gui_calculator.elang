@@ -1,0 +1,43 @@
+note: Interactive GUI calculator in E-Lang
+
+create window with name calc
+set calc title to "E-Lang Calculator"
+set calc size to x equals 360, y equals 260
+
+add label to calc with name header
+set header text to "Enter x and y, then press ="
+show header in x equals 20, y equals 20
+
+add label to calc with name label_x
+set label_x text to "x:"
+show label_x in x equals 20, y equals 60
+
+add entry to calc with name input_x
+show input_x in x equals 60, y equals 60
+
+add label to calc with name label_y
+set label_y text to "y:"
+show label_y in x equals 190, y equals 60
+
+add entry to calc with name input_y
+show input_y in x equals 230, y equals 60
+
+add button to calc with name equals_button
+set equals_button text to "="
+show equals_button in x equals 160, y equals 100
+
+add label to calc with name result_label
+set result_label text to "Result will appear here"
+show result_label in x equals 20, y equals 150
+
+when equals_button is clicked then
+  set x to call to_number with text of input_x
+  set y to call to_number with text of input_y
+  set sum to x plus y
+  set difference to x minus y
+  set product to x times y
+  set quotient to x divided by y
+  set result_label text to "x + y = " plus sum plus ", x - y = " plus difference plus ", x times y = " plus product plus ", x divided by y = " plus quotient
+end
+
+show calc

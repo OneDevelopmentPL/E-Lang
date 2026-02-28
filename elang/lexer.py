@@ -82,11 +82,12 @@ KEYWORDS = {
     "size": "SIZE",
     "button": "BUTTON",
     "label": "LABEL",
+    "entry": "ENTRY",
     "text": "TEXT",
     "in": "IN",
-    "x": "X",
-    "y": "Y",
     "show": "SHOW",
+    "when": "WHEN",
+    "clicked": "CLICKED",
 }
 
 

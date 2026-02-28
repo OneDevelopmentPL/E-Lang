@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import ast
-from .errors import ELangNameError, ELangRuntimeError, ELangTypeError
+from .errors import ELangError, ELangNameError, ELangRuntimeError, ELangTypeError
 from .parser import Parser
 
 
@@ -78,6 +78,18 @@ class Interpreter:
             lambda lst: sorted(lst, reverse=True),
         )
 
+        def to_number(value: Any) -> Any:
+            if isinstance(value, (int, float)):
+                return value
+            try:
+                return int(str(value))
+            except Exception as exc:  # noqa: BLE001
+                raise ELangTypeError(
+                    "I could not turn this into a whole number"
+                ) from exc
+
+        env.define("to_number", to_number)
+
     # Statement execution -------------------------------------------------
 
     def _execute_block(self, statements: List[ast.Stmt], env: Environment) -> None:
@@ -131,6 +143,8 @@ class Interpreter:
             self._ensure_gui().add_button(stmt.window_name, stmt.button_name)
         elif isinstance(stmt, ast.AddLabel):
             self._ensure_gui().add_label(stmt.window_name, stmt.label_name)
+        elif isinstance(stmt, ast.AddEntry):
+            self._ensure_gui().add_entry(stmt.window_name, stmt.entry_name)
         elif isinstance(stmt, ast.SetGuiProperty):
             self._ensure_gui().set_property(
                 stmt.target_name, stmt.property_name, self._eval(stmt.expr, env)
@@ -141,6 +155,8 @@ class Interpreter:
             x_val = self._eval(stmt.x, env) if stmt.x is not None else None
             y_val = self._eval(stmt.y, env) if stmt.y is not None else None
             self._ensure_gui().show(stmt.name, x_val, y_val)
+        elif isinstance(stmt, ast.OnClick):
+            self._ensure_gui().register_on_click(stmt.widget_name, stmt.body)
         else:
             raise ELangRuntimeError(f"I do not know how to execute statement type {type(stmt)!r}")
 
@@ -188,6 +204,8 @@ class Interpreter:
             if not isinstance(value, (list, str)):
                 raise ELangTypeError("I can only take the length of a list or text")
             return len(value)
+        if isinstance(expr, ast.TextOf):
+            return self._ensure_gui().get_text(expr.name)
         raise ELangRuntimeError(f"I do not know how to evaluate expression type {type(expr)!r}")
 
     def _eval_binary(self, expr: ast.Binary, env: Environment) -> Any:
@@ -312,27 +330,31 @@ class Interpreter:
 
     def _ensure_gui(self) -> "GuiManager":
         if self._gui is None:
-            self._gui = GuiManager()
+            self._gui = GuiManager(self)
         return self._gui
 
 
 class GuiManager:
     """
     Very small wrapper around Tkinter so E-Lang programs can create
-    simple windows, buttons, and labels.
+    simple windows, buttons, labels, and text inputs.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, owner: Interpreter) -> None:
         try:
             import tkinter as tk
-        except Exception as exc:
+            from tkinter import messagebox
+        except Exception as exc:  # noqa: BLE001
             raise ELangRuntimeError(
                 "I tried to create a graphical window, but Tkinter is not available."
             ) from exc
 
+        self._owner = owner
         self._tk = tk
+        self._messagebox = messagebox
         self._root: Optional[tk.Tk] = None
         self._widgets: Dict[str, Any] = {}
+        self._handlers: Dict[str, List[ast.Stmt]] = {}
 
     def _get_root(self) -> "tk.Tk":  # type: ignore[name-defined]
         if self._root is None:
@@ -352,11 +374,17 @@ class GuiManager:
         parent = self._get_widget(window_name)
         button = self._tk.Button(parent)
         self._widgets[button_name] = button
+        self._maybe_bind_click(button_name, button)
 
     def add_label(self, window_name: str, label_name: str) -> None:
         parent = self._get_widget(window_name)
         label = self._tk.Label(parent)
         self._widgets[label_name] = label
+
+    def add_entry(self, window_name: str, entry_name: str) -> None:
+        parent = self._get_widget(window_name)
+        entry = self._tk.Entry(parent)
+        self._widgets[entry_name] = entry
 
     def set_property(self, target_name: str, property_name: str, value: Any) -> None:
         widget = self._get_widget(target_name)
@@ -370,11 +398,14 @@ class GuiManager:
                     f"I can only set the title of a window, not of '{target_name}'"
                 )
         elif prop == "text":
-            if hasattr(widget, "config"):
+            if isinstance(widget, self._tk.Entry):
+                widget.delete(0, self._tk.END)
+                widget.insert(0, str(value))
+            elif hasattr(widget, "config"):
                 widget.config(text=str(value))
             else:
                 raise ELangRuntimeError(
-                    f"I can only set the text of things like buttons and labels, not of '{target_name}'"
+                    f"I can only set the text of things like buttons, labels, and inputs, not of '{target_name}'"
                 )
         else:
             raise ELangRuntimeError(
@@ -412,6 +443,40 @@ class GuiManager:
             widget.place(x=x_int, y=y_int)
         else:
             widget.pack()
+
+    def register_on_click(self, widget_name: str, body: List[ast.Stmt]) -> None:
+        self._handlers[widget_name] = body
+        widget = self._widgets.get(widget_name)
+        if widget is not None:
+            self._maybe_bind_click(widget_name, widget)
+
+    def _maybe_bind_click(self, widget_name: str, widget: Any) -> None:
+        tk = self._tk
+        if isinstance(widget, tk.Button):
+            widget.config(command=lambda n=widget_name: self._handle_click(n))
+
+    def _handle_click(self, widget_name: str) -> None:
+        body = self._handlers.get(widget_name)
+        if not body:
+            return
+        try:
+            self._owner._execute_block(body, self._owner.global_env)
+        except ELangError as exc:
+            self._messagebox.showerror("E-Lang error", f"Something went wrong: {exc}")
+
+    def get_text(self, widget_name: str) -> str:
+        widget = self._get_widget(widget_name)
+        tk = self._tk
+        if isinstance(widget, tk.Entry):
+            return widget.get()
+        if hasattr(widget, "cget"):
+            try:
+                return str(widget.cget("text"))
+            except Exception:  # noqa: BLE001
+                pass
+        raise ELangRuntimeError(
+            "I can only read the text of input fields, buttons, and labels"
+        )
 
 
 def run_source(source: str) -> Tuple[Environment, str]:

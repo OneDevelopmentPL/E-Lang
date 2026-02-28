@@ -25,9 +25,7 @@ class Parser:
     def parse(self) -> ast.Program:
         statements: List[ast.Stmt] = []
         while not self._is_at_end():
-            # Skip extra blank lines.
-            while self._match("NEWLINE"):
-                pass
+            self._skip_newlines()
             if self._is_at_end():
                 break
             statements.append(self._statement())
@@ -50,6 +48,8 @@ class Parser:
             return self._repeat_stmt()
         if self._check("DEFINE"):
             return self._func_def()
+        if self._match("WHEN"):
+            return self._when_stmt()
         if self._match("SAY"):
             expr = self._expression()
             return ast.Say(expr)
@@ -68,7 +68,7 @@ class Parser:
             return self._show_widget_stmt()
         if self._match("ADD"):
             # Either math update ("add 1 to x") or GUI add
-            if self._check("BUTTON") or self._check("LABEL"):
+            if self._check("BUTTON") or self._check("LABEL") or self._check("ENTRY"):
                 return self._add_gui_stmt()
             return self._math_update_stmt(previous_kind="ADD")
         if self._match("SUBTRACT", "MULTIPLY", "DIVIDE"):
@@ -116,14 +116,20 @@ class Parser:
         then_branch: List[ast.Stmt] = []
         else_branch: Optional[List[ast.Stmt]] = None
 
-        while not self._check("END") and not self._check("OTHERWISE") and not self._is_at_end():
+        while True:
+            self._skip_newlines()
+            if self._check("END") or self._check("OTHERWISE") or self._is_at_end():
+                break
             then_branch.append(self._statement())
             self._match("NEWLINE")
 
         if self._match("OTHERWISE"):
             self._consume("NEWLINE", "I expected a new line after 'otherwise'")
             else_branch = []
-            while not self._check("END") and not self._is_at_end():
+            while True:
+                self._skip_newlines()
+                if self._check("END") or self._is_at_end():
+                    break
                 else_branch.append(self._statement())
                 self._match("NEWLINE")
 
@@ -135,7 +141,10 @@ class Parser:
         self._consume("DO", "I expected 'do' after the while condition")
         self._consume("NEWLINE", "I expected a new line after 'do'")
         body: List[ast.Stmt] = []
-        while not self._check("END") and not self._is_at_end():
+        while True:
+            self._skip_newlines()
+            if self._check("END") or self._is_at_end():
+                break
             body.append(self._statement())
             self._match("NEWLINE")
         self._consume("END", "I expected 'end' to finish the while loop")
@@ -146,7 +155,10 @@ class Parser:
         self._consume("TIMES", "I expected 'times' after the repeat count")
         self._consume("NEWLINE", "I expected a new line after 'times'")
         body: List[ast.Stmt] = []
-        while not self._check("END") and not self._is_at_end():
+        while True:
+            self._skip_newlines()
+            if self._check("END") or self._is_at_end():
+                break
             body.append(self._statement())
             self._match("NEWLINE")
         self._consume("END", "I expected 'end' to finish the repeat loop")
@@ -183,7 +195,10 @@ class Parser:
         self._consume("NEWLINE", "I expected a new line after the function header")
 
         body: List[ast.Stmt] = []
-        while not self._check("END") and not self._is_at_end():
+        while True:
+            self._skip_newlines()
+            if self._check("END") or self._is_at_end():
+                break
             body.append(self._statement())
             self._match("NEWLINE")
 
@@ -220,8 +235,10 @@ class Parser:
             kind = "button"
         elif self._match("LABEL"):
             kind = "label"
+        elif self._match("ENTRY"):
+            kind = "entry"
         else:
-            raise self._error(self._peek(), "I expected 'button' or 'label' after 'add'")
+            raise self._error(self._peek(), "I expected 'button', 'label', or 'entry' after 'add'")
 
         self._consume("TO", "I expected 'to' after the control type")
         window_name = self._consume(
@@ -235,12 +252,16 @@ class Parser:
 
         if kind == "button":
             return ast.AddButton(window_name=window_name, button_name=widget_name)
+        if kind == "entry":
+            return ast.AddEntry(window_name=window_name, entry_name=widget_name)
         return ast.AddLabel(window_name=window_name, label_name=widget_name)
 
     def _set_size_stmt(self, window_name: str) -> ast.SetGuiSize:
         # Grammar: set WINDOW size to x equals 300, y equals 300
         self._consume("TO", "I expected 'to' after 'size'")
-        self._consume("X", "I expected 'x' after 'size to'")
+        x_tok = self._consume("IDENT", "I expected 'x' after 'size to'")
+        if x_tok.lexeme.lower() != "x":
+            raise self._error(x_tok, "I expected 'x' after 'size to'")
         # allow either 'equals' or 'is equal to'
         if self._match("EQUALS"):
             pass
@@ -253,7 +274,9 @@ class Parser:
         # comma between coordinates
         if self._check("COMMA"):
             self._advance()
-        self._consume("Y", "I expected 'y' after the x value")
+        y_tok = self._consume("IDENT", "I expected 'y' after the x value")
+        if y_tok.lexeme.lower() != "y":
+            raise self._error(y_tok, "I expected 'y' after the x value")
         if self._match("EQUALS"):
             pass
         elif self._match("IS"):
@@ -270,7 +293,9 @@ class Parser:
         name = self._consume("IDENT", "I expected a widget or window name after 'show'").lexeme
         if not self._match("IN"):
             return ast.ShowWidget(name=name)
-        self._consume("X", "I expected 'x' after 'in'")
+        x_tok = self._consume("IDENT", "I expected 'x' after 'in'")
+        if x_tok.lexeme.lower() != "x":
+            raise self._error(x_tok, "I expected 'x' after 'in'")
         # again support 'equals' or 'is equal to'
         if self._match("EQUALS"):
             pass
@@ -282,7 +307,9 @@ class Parser:
         x_expr = self._expression()
         if self._check("COMMA"):
             self._advance()
-        self._consume("Y", "I expected 'y' after the x expression")
+        y_tok = self._consume("IDENT", "I expected 'y' after the x expression")
+        if y_tok.lexeme.lower() != "y":
+            raise self._error(y_tok, "I expected 'y' after the x expression")
         if self._match("EQUALS"):
             pass
         elif self._match("IS"):
@@ -436,6 +463,11 @@ class Parser:
             list_expr = self._expression()
             return ast.LengthOf(list_expr)
 
+        if self._match("TEXT"):
+            self._consume("OF", "I expected 'of' after 'text'")
+            name = self._consume("IDENT", "I expected a control name after 'text of'").lexeme
+            return ast.TextOf(name)
+
         # Call expressions
         if self._match("CALL"):
             return self._call_expr()
@@ -482,6 +514,31 @@ class Parser:
         list_expr = self._expression()
         return ast.ListAccess(list_expr, index_expr)
 
+    def _when_stmt(self) -> ast.OnClick:
+        widget_name = self._consume("IDENT", "I expected a control name after 'when'").lexeme
+        self._consume("IS", "I expected 'is' after the control name")
+        self._consume("CLICKED", "I expected 'clicked' after 'is'")
+        self._consume("THEN", "I expected 'then' after 'is clicked'")
+        self._consume("NEWLINE", "I expected a new line after 'then'")
+
+        body: List[ast.Stmt] = []
+        while True:
+            self._skip_newlines()
+            if self._check("END") or self._is_at_end():
+                break
+            body.append(self._statement())
+            self._match("NEWLINE")
+
+        self._consume("END", "I expected 'end' to finish the when block")
+        return ast.OnClick(widget_name, body)
+
+    # Helpers ------------------------------------------------------------
+
+    def _skip_newlines(self) -> None:
+        """Consume any number of NEWLINE tokens to allow blank lines."""
+        while self._match("NEWLINE"):
+            pass
+
     # Utility methods ------------------------------------------------------
 
     def _match(self, *types: str) -> bool:
@@ -522,4 +579,3 @@ class Parser:
 
     def _error(self, token: Token, message: str) -> ELangSyntaxError:
         return ELangSyntaxError(message, line=token.line, column=token.column)
-

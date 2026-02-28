@@ -51,6 +51,11 @@ class LengthOf(Expr):
     list_expr: Expr
 
 
+@dataclass
+class TextOf(Expr):
+    name: str
+
+
 # Statements ---------------------------------------------------------------
 
 
@@ -155,6 +160,12 @@ class AddLabel(Stmt):
 
 
 @dataclass
+class AddEntry(Stmt):
+    window_name: str
+    entry_name: str
+
+
+@dataclass
 class SetGuiProperty(Stmt):
     target_name: str
     property_name: str
@@ -173,5 +184,11 @@ class ShowWidget(Stmt):
     name: str
     x: Optional[Expr] = None
     y: Optional[Expr] = None
+
+
+@dataclass
+class OnClick(Stmt):
+    widget_name: str
+    body: List[Stmt]
 
 
