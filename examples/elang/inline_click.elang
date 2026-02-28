@@ -1,0 +1,24 @@
+note: Inline click handler demo using the single-line 'when ... then call ...' syntax
+
+create window with name app
+set app title to "Inline Click Demo"
+set app size to x equals 320, y equals 180
+
+add label to app with name header
+set header text to "Type your name and press Hello"
+show header in x equals 20, y equals 20
+
+add entry to app with name input_name
+show input_name in x equals 20, y equals 60
+
+add button to app with name hello_button
+set hello_button text to "Hello"
+show hello_button in x equals 220, y equals 58
+
+when hello_button is clicked then call greet with text of input_name
+
+define a function called greet that takes person and does
+  set header text to "Hello " plus person plus "!"
+end
+
+show app

@@ -1,0 +1,32 @@
+note: Simple Celsius-to-Fahrenheit converter GUI
+
+create window with name temp_win
+set temp_win title to "Temperature Converter"
+set temp_win size to x equals 340, y equals 200
+
+add label to temp_win with name prompt
+set prompt text to "Enter °C and press Convert"
+show prompt in x equals 20, y equals 20
+
+add entry to temp_win with name input_c
+show input_c in x equals 20, y equals 60
+
+add button to temp_win with name convert_button
+set convert_button text to "Convert"
+show convert_button in x equals 220, y equals 58
+
+add label to temp_win with name output_label
+set output_label text to "Result will appear here"
+show output_label in x equals 20, y equals 110
+
+when convert_button is clicked then
+  set celsius to call to_number with text of input_c
+
+  set fahrenheit to celsius times 9
+  set fahrenheit to fahrenheit divided by 5
+  set fahrenheit to fahrenheit plus 32
+
+  set output_label text to celsius plus " C = " plus fahrenheit plus " F"
+end
+
+show temp_win

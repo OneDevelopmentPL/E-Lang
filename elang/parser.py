@@ -519,8 +519,13 @@ class Parser:
         self._consume("IS", "I expected 'is' after the control name")
         self._consume("CLICKED", "I expected 'clicked' after 'is'")
         self._consume("THEN", "I expected 'then' after 'is clicked'")
-        self._consume("NEWLINE", "I expected a new line after 'then'")
+        # Inline form: "when btn is clicked then call foo with 1"
+        if not self._match("NEWLINE"):
+            self._consume("CALL", "I expected 'call' after 'then' in an inline when")
+            call_expr = self._call_expr()
+            return ast.OnClick(widget_name, [ast.ExprStmt(call_expr)])
 
+        # Block form:
         body: List[ast.Stmt] = []
         while True:
             self._skip_newlines()
